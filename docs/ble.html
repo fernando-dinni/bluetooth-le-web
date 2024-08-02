@@ -3,35 +3,73 @@
 <head>
     <title>Bluetooth LE</title>
     <script>
-        async function connectToBluetooth() {
+        async function log(message) {
+            console.log(message);
+            window.ReactNativeWebView.postMessage(message);
+        }
+
+        async function populateBluetoothDevices() {
+            const devicesSelect = document.querySelector('#devicesSelect');
             try {
+                log('Getting existing permitted Bluetooth devices...');
+                const devices = await navigator.bluetooth.getDevices();
+
+                log('> Got ' + devices.length + ' Bluetooth devices.');
+                devicesSelect.textContent = '';
+                for (const device of devices) {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = device.name;
+                    devicesSelect.appendChild(option);
+                }
+            } catch (error) {
+                log('Argh! ' + error);
+            }
+        }
+
+        async function onRequestBluetoothDeviceButtonClick() {
+            try {
+                log('Requesting any Bluetooth device...');
                 const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['battery_service']
+                    // filters: [...] <- Prefer filters to save energy & show relevant devices.
+                    acceptAllDevices: true
                 });
 
-                const server = await device.gatt.connect();
-                console.log('Connected to GATT server');
-
-                const service = await server.getPrimaryService('battery_service');
-                const characteristic = await service.getCharacteristic('battery_level');
-                const value = await characteristic.readValue();
-                console.log('Battery level:', value.getUint8(0));
-                
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'battery_level', value: value.getUint8(0) }));
+                log('> Requested ' + device.name + ' (' + device.id + ')');
+                populateBluetoothDevices();
             } catch (error) {
-                console.log('Error:', error);
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: error.message }));
+                log('Argh! ' + error);
+            }
+        }
+
+        async function onForgetBluetoothDeviceButtonClick() {
+            try {
+                const devices = await navigator.bluetooth.getDevices();
+
+                const deviceIdToForget = document.querySelector('#devicesSelect').value;
+                const device = devices.find((device) => device.id == deviceIdToForget);
+                if (!device) {
+                    throw new Error('No Bluetooth device to forget');
+                }
+                log('Forgetting ' + device.name + 'Bluetooth device...');
+                await device.forget();
+
+                log('  > Bluetooth device has been forgotten.');
+                populateBluetoothDevices();
+            } catch (error) {
+                log('Argh! ' + error);
             }
         }
 
         window.onload = () => {
-            document.getElementById('connectButton').addEventListener('click', connectToBluetooth);
+            populateBluetoothDevices();
         };
     </script>
 </head>
 <body>
     <h1>Bluetooth LE Example</h1>
-    <button id="connectButton">Connect to Bluetooth</button>
+    <button id="requestButton" onclick="onRequestBluetoothDeviceButtonClick()">Request Bluetooth Device</button>
+    <button id="forgetButton" onclick="onForgetBluetoothDeviceButtonClick()">Forget Bluetooth Device</button>
+    <select id="devicesSelect"></select>
 </body>
 </html>
